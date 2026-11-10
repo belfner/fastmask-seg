@@ -1,0 +1,147 @@
+[project]
+name = "fastmask-seg"
+version = "0.1.0"
+description = "Fast unique-color and per-color mask extraction for color-coded segmentation masks"
+readme = "README.md"
+authors = [
+    { name = "belfner", email = "belfner@belfner.com" }
+]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+keywords = [
+    "segmentation",
+    "mask",
+    "image-processing",
+    "computer-vision",
+    "numpy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/belfner/fastmask-seg"
+Repository = "https://github.com/belfner/fastmask-seg"
+Issues = "https://github.com/belfner/fastmask-seg/issues"
+
+[project.optional-dependencies]
+numba = [
+    "numba>=0.68.1",
+]
+
+[dependency-groups]
+dev = [
+    "isort==5.13.2",
+    "mypy>=1.18.2",
+    "pre-commit>=4.3.0",
+    "ruff==0.15.22",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.4,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "F",    # Pyflakes - undefined names, unused imports, real bugs
+    "E",    # pycodestyle errors - see note below about whitespace rules
+    "W",    # pycodestyle warnings - W605 catches invalid escape sequences
+    "UP",   # pyupgrade - modernize syntax to your target-version
+    "B",    # flake8-bugbear - mutable defaults, loop-closure bugs, bad except
+    "SIM",  # flake8-simplify - collapsible ifs, redundant booleans, dict.get
+    "C4",   # flake8-comprehensions - unnecessary generators, casts, literals
+    "RUF",  # Ruff-specific - RUF100 stale noqa, mutable class defaults
+    "PIE",  # flake8-pie - dead pass, duplicate class fields, needless spread
+    "RET",  # flake8-return - return-statement cleanup
+    "TC",   # flake8-type-checking - move typing-only imports into TYPE_CHECKING
+    "PTH",  # flake8-use-pathlib - os.path -> pathlib
+    "FURB", # refurb - idiomatic rewrites beyond what UP catches
+    "PL",   # Pylint (PLC/PLE/PLR/PLW) - broad correctness; thresholds ignored below
+    "DTZ",  # flake8-datetimez - naive datetimes and tz-less constructor calls
+    "LOG",  # flake8-logging - getLogger misuse, .exception() outside handlers
+    "PERF", # Perflint - manual loops that should be comprehensions
+    "FLY",  # flynt - static str.join() -> f-string
+    "T10",  # flake8-debugger - stray breakpoint() / pdb.set_trace()
+    "PGH",  # pygrep-hooks - blanket noqa, bare type:ignore, invalid mock access
+    "PYI",  # flake8-pyi - .pyi stub conventions (inert if you ship no stubs)
+    "YTT",  # flake8-2020 - brittle sys.version string checks
+    "PT",   # flake8-pytest-style - fixture and parametrize conventions
+    "TRY",  # tryceratops - exception-handling antipatterns
+    "EXE",  # flake8-executable - shebang vs. file-permission mismatches
+    "FA",   # flake8-future-annotations - enforce `from __future__ import annotations`
+]
+
+ignore = [
+    "E501",    # line-too-long - the formatter owns line width
+    "W291",    # trailing-whitespace - formatter's job
+    "W293",    # whitespace on blank line - formatter's job
+    "RET504",  # unnecessary assignment before return - named results aid debugging
+    "TRY003",  # long messages outside the exception class
+    "PLR2004", # magic-value-comparison - flags every bare literal in a comparison
+    "PLR0911", # too-many-return-statements - arbitrary threshold
+    "PLR0912", # too-many-branches - arbitrary threshold
+    "PLR0913", # too-many-arguments - arbitrary threshold
+    "PLR0915", # too-many-statements - arbitrary threshold
+    "UP015",   # redundant-open-modes - explicit open(f, "r") is fine
+    "SIM105",  # suppressible-exception - try/except/pass over contextlib.suppress
+    "RET506",  # superfluous-else-raise - else-after-raise can read better
+    "RET507",  # superfluous-else-continue - else-after-continue can read better
+    "RET508",  # superfluous-else-break - else-after-break can read better
+    "RUF002",  # ambiguous unicode character in docstring
+    "SIM108",  # if-else block instead of ternary - ternaries aren't always clearer
+    "SIM103",  # needless-bool - returning the condition directly hurts readability sometimes
+    "SIM114",  # if-with-same-arms - merging branches with `or` obscures intent
+    "RET501",  # unnecessary `return None` - explicit is sometimes preferable
+    "PIE808",  # unnecessary-range-start - range(0, n) reads fine
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.isort]
+profile = "pycharm"
+line_length = 120
+include_trailing_comma = true
+treat_all_comments_as_code = true
+combine_as_imports = true
+known_first_party = ["fastmask_seg"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+# numba ships without type information; its njit decorator leaves kernels untyped.
+module = ["numba", "numba.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["fastmask_seg._numba_kernels"]
+disallow_untyped_decorators = false
