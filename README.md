@@ -27,7 +27,7 @@ pip install fastmask-seg            # NumPy only
 pip install "fastmask-seg[numba]"   # adds compiled kernels for 3-channel images
 ```
 
-Requires Python 3.12+ and NumPy 2.0+. The `numba` extra gives the same results as NumPy, with color analysis 1.3-2x faster and masks of named colors 2-4x faster ([details](https://github.com/belfner/fastmask-seg/blob/main/docs/performance.md)).
+Requires Python 3.12+ and NumPy 1.26+. The `numba` extra gives the same results as NumPy, with color analysis 1.3-2x faster and masks of named colors 2-4x faster ([details](https://github.com/belfner/fastmask-seg/blob/main/docs/performance.md)).
 
 ## API
 

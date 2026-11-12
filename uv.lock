@@ -111,8 +111,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numba", marker = "extra == 'numba'", specifier = ">=0.68.1" },
-    { name = "numpy", specifier = ">=2.0" },
+    { name = "numba", marker = "extra == 'numba'", specifier = ">=0.61" },
+    { name = "numpy", specifier = ">=1.26" },
 ]
 provides-extras = ["numba"]
 

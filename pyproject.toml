@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "numpy>=2.0",
+    "numpy>=1.26",
 ]
 
 [project.urls]
@@ -39,7 +39,7 @@ Issues = "https://github.com/belfner/fastmask-seg/issues"
 
 [project.optional-dependencies]
 numba = [
-    "numba>=0.68.1",
+    "numba>=0.61",
 ]
 
 [dependency-groups]
