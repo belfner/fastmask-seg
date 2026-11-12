@@ -26,6 +26,7 @@ from typing import (
     Any,
     Literal,
     NamedTuple,
+    cast,
 )
 
 import numpy as np
@@ -74,12 +75,13 @@ class ColorFormat(Enum):
     """Channel layout of an image or color array.
 
     Attributes:
-      GRAYSCALE: Single channel, where the pixel value is the color ID.
+      SINGLE_CHANNEL: Single channel of any integer dtype (a grayscale or label image), where the pixel value is the
+        color ID.
       COLOR: Three channels (RGB or BGR).
       COLOR_ALPHA: Four channels (RGBA or BGRA).
     """
 
-    GRAYSCALE = auto()
+    SINGLE_CHANNEL = auto()
     COLOR = auto()
     COLOR_ALPHA = auto()
 
@@ -201,13 +203,13 @@ def _get_image_color_format(image: npt.NDArray[Any]) -> ColorFormat:
     """Determine the channel layout of an image from its shape.
 
     Args:
-      image (npt.NDArray[Any]): 2-D grayscale image or 3-D image with 3 or 4 channels.
+      image (npt.NDArray[Any]): 2-D image or 3-D image with 3 or 4 channels.
 
     Returns:
       ColorFormat: The image's channel layout.
     """
     if image.ndim == 2:
-        return ColorFormat.GRAYSCALE
+        return ColorFormat.SINGLE_CHANNEL
     return ColorFormat.COLOR if image.shape[2] == 3 else ColorFormat.COLOR_ALPHA
 
 
@@ -249,6 +251,29 @@ def _fill_mask(mask: npt.NDArray[np.bool_], source: npt.NDArray[Any], value: Any
         np.equal(source, value, out=mask)
     else:
         mask.fill(False)
+
+
+def _cast_requests(
+    requested: npt.NDArray[np.integer],
+    dtype: np.dtype[Any],
+) -> tuple[npt.NDArray[Any], npt.NDArray[np.bool_]]:
+    """Cast requested color IDs to an integer dtype, flagging the requests that dtype can hold.
+
+    Every later comparison then runs within one integer dtype. Mixed signed and unsigned 64-bit operands would promote
+    to float64, which merges IDs above 2**53. The cast values form a new array, so they stay intact when the request
+    array shares storage with an output buffer.
+
+    Args:
+      requested (npt.NDArray[np.integer]): 1-D color IDs.
+      dtype (np.dtype[Any]): Integer dtype to cast to.
+
+    Returns:
+      tuple[npt.NDArray[Any], npt.NDArray[np.bool_]]: The IDs in ``dtype``, with 0 in place of IDs outside its range,
+        and whether each ID is within that range.
+    """
+    limits = np.iinfo(dtype)
+    in_range = (requested >= limits.min) & (requested <= limits.max)
+    return np.where(in_range, requested, 0).astype(dtype), in_range
 
 
 def _iter_masks(
@@ -307,18 +332,18 @@ class FastMask:
 
     Derived arrays (color ID image, unique colors, pixel counts, label image) are computed on first access and cached,
     so repeated queries on the same image pay only for the comparisons. The object borrows ``image``, and the color ID
-    image of a grayscale or 4-channel image shares its storage, so the image contents stay unchanged while the object
+    image of a 2-D or 4-channel image shares its storage, so the image contents stay unchanged while the object
     is in use; a changed image takes a new ``FastMask``.
 
     Attributes:
-      image (npt.NDArray[np.uint8]): The source image, in the layout it was given.
+      image (npt.NDArray[np.integer]): The source image, in the layout it was given.
       color_format (ColorFormat): Channel layout of ``image``.
       backend (Backend): Whether the numba kernels are used, see ``__init__``.
     """
 
     def __init__(
         self,
-        image: npt.NDArray[np.uint8],
+        image: npt.NDArray[np.integer],
         *,
         color_id_buffer: npt.NDArray[np.uint32] | None = None,
         backend: Backend = "auto",
@@ -326,12 +351,13 @@ class FastMask:
         """Wrap an image for mask queries.
 
         Args:
-          image (npt.NDArray[np.uint8]): 2-D grayscale, 3-channel, or 4-channel uint8 image. C-contiguous images take
+          image (npt.NDArray[np.integer]): 3-channel or 4-channel uint8 image, or 2-D image of any integer dtype: a
+            grayscale image, or a label image such as an instance-ID or object-index pass. C-contiguous images take
             the fastest paths.
           color_id_buffer (npt.NDArray[np.uint32] | None = None): C-contiguous little-endian uint32 buffer of shape
             ``(H, W)``, in storage separate from ``image``, that holds the color ID image of a 3-channel image, so a
             loop over same-sized images reuses one allocation. ``color_id_image`` is then this buffer, and two live
-            instances sharing it overwrite each other's IDs. Grayscale and 4-channel images derive their color ID image
+            instances sharing it overwrite each other's IDs. 2-D and 4-channel images derive their color ID image
             from ``image`` itself and ignore this buffer. The numba kernels read the image directly, and a call they
             serve while a buffer is set emits a ``UserWarning``.
           backend (Backend = "auto"): ``"auto"`` uses the kernels of the ``numba`` extra when it is installed, on
@@ -346,21 +372,22 @@ class FastMask:
         self.backend: Backend = backend
 
     @property
-    def is_grayscale(self) -> bool:
+    def is_single_channel(self) -> bool:
         """Whether the image is single-channel."""
-        return self.color_format is ColorFormat.GRAYSCALE
+        return self.color_format is ColorFormat.SINGLE_CHANNEL
 
     @cached_property
     def color_id_image(self) -> npt.NDArray[Any]:
         """The image with every pixel replaced by its color ID.
 
-        A grayscale image is its own color ID image (uint8). Color images give uint32 IDs; for a 4-channel image with a
-        contiguous channel axis this is a zero-copy view of ``image``, and for a 3-channel image it is
+        A 2-D image is its own color ID image, in its own dtype. Color images give uint32 IDs; for a 4-channel image
+        with a contiguous channel axis this is a zero-copy view of ``image``, and for a 3-channel image it is
         ``color_id_buffer`` when one was given.
         """
-        if self.is_grayscale:
+        if self.is_single_channel:
             return self.image
-        return colors_to_color_ids(self.image, out=self._color_id_buffer)
+        # 3-channel and 4-channel images are uint8.
+        return colors_to_color_ids(cast("npt.NDArray[np.uint8]", self.image), out=self._color_id_buffer)
 
     @cached_property
     def _kernel_analysis(self) -> _KernelAnalysis | None:
@@ -427,12 +454,12 @@ class FastMask:
         return self._runs.unique_ids if analysis is None else analysis.unique_ids
 
     @cached_property
-    def unique_colors(self) -> npt.NDArray[np.uint8]:
+    def unique_colors(self) -> npt.NDArray[np.integer]:
         """The unique colors present in the image, in the image's channel layout and in ``unique_color_ids`` order.
 
-        Grayscale images give a 1-D array of gray values.
+        2-D images give a 1-D array of pixel values.
         """
-        if self.is_grayscale:
+        if self.is_single_channel:
             return self.unique_color_ids
         return color_ids_to_colors(self.unique_color_ids, self.color_format)
 
@@ -468,16 +495,17 @@ class FastMask:
         self,
         *,
         color_ids: npt.NDArray[np.integer] | None = None,
-        colors: npt.NDArray[np.uint8] | None = None,
+        colors: npt.NDArray[np.integer] | None = None,
         out: npt.NDArray[np.bool_] | None = None,
     ) -> ColorMasks:
         """Generate a boolean mask for each requested color or color ID.
 
         Args:
           color_ids (npt.NDArray[np.integer] | None = None): 1-D integer color IDs to generate masks for.
-          colors (npt.NDArray[np.uint8] | None = None): uint8 colors to generate masks for, in the image's channel
-            layout. A single color may be given as shape ``(3,)`` or ``(4,)``. Pass at most one of ``colors`` and
-            ``color_ids``; when both are None, masks are generated for every entry of ``unique_color_ids``.
+          colors (npt.NDArray[np.integer] | None = None): Colors to generate masks for: uint8 channel values in the
+            image's channel layout for color images, where a single color may be given as shape ``(3,)`` or ``(4,)``,
+            or integer pixel values for 2-D images. Pass at most one of ``colors`` and ``color_ids``; when both are
+            None, masks are generated for every entry of ``unique_color_ids``.
           out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(N, H, W)`` with ``N`` at least the number
             of requested masks, in storage separate from the image and the arrays derived from it. Masks are written to
             its first entries, so one buffer sized for the largest request serves a loop over images. None allocates a
@@ -505,16 +533,16 @@ class FastMask:
         self,
         *,
         color_id: int | None = None,
-        color: npt.NDArray[np.uint8] | None = None,
+        color: npt.NDArray[np.integer] | np.integer | None = None,
         out: npt.NDArray[np.bool_] | None = None,
     ) -> npt.NDArray[np.bool_]:
         """Generate the boolean mask of one color or color ID.
 
         Args:
           color_id (int | None = None): Color ID to generate the mask for.
-          color (npt.NDArray[np.uint8] | None = None): uint8 color to generate the mask for, in the image's channel
-            layout: shape ``(3,)`` or ``(4,)`` for color images, a NumPy uint8 gray value for grayscale images. Pass
-            exactly one of ``color`` and ``color_id``.
+          color (npt.NDArray[np.integer] | np.integer | None = None): Color to generate the mask for: uint8 channel
+            values of shape ``(3,)`` or ``(4,)`` in the image's channel layout for color images, or an integer pixel
+            value (NumPy scalar or 0-d array) for 2-D images. Pass exactly one of ``color`` and ``color_id``.
           out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(H, W)``, with the same storage
             requirement as ``get_color_masks``, that receives the mask and is returned. None allocates a new array.
 
@@ -522,14 +550,15 @@ class FastMask:
           npt.NDArray[np.bool_]: Mask of shape ``(H, W)``, all False when the color is absent from the image.
         """
         color_ids = None if color_id is None else np.array([color_id])
-        masks = self.get_color_masks(color_ids=color_ids, colors=color, out=None if out is None else out[np.newaxis])
+        colors = None if color is None else np.asarray(color)
+        masks = self.get_color_masks(color_ids=color_ids, colors=colors, out=None if out is None else out[np.newaxis])
         return masks.masks[0] if out is None else out
 
     def iter_color_masks(
         self,
         *,
         color_ids: npt.NDArray[np.integer] | None = None,
-        colors: npt.NDArray[np.uint8] | None = None,
+        colors: npt.NDArray[np.integer] | None = None,
         out: npt.NDArray[np.bool_] | None = None,
     ) -> Iterator[npt.NDArray[np.bool_]]:
         """Return an iterator over the mask of each requested color, one at a time.
@@ -539,9 +568,10 @@ class FastMask:
 
         Args:
           color_ids (npt.NDArray[np.integer] | None = None): 1-D integer color IDs to generate masks for.
-          colors (npt.NDArray[np.uint8] | None = None): uint8 colors to generate masks for, in the image's channel
-            layout. Pass at most one of ``colors`` and ``color_ids``; when both are None, masks are generated for
-            every entry of ``unique_color_ids``.
+          colors (npt.NDArray[np.integer] | None = None): Colors to generate masks for: uint8 channel values in the
+            image's channel layout for color images, or integer pixel values for 2-D images. Pass at most one of
+            ``colors`` and ``color_ids``; when both are None, masks are generated for every entry of
+            ``unique_color_ids``.
           out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(H, W)``, with the same storage
             requirement as ``get_color_masks``, that receives every mask in turn and is yielded each time, overwritten
             in place, so each mask must be consumed before the next is requested. None allocates each mask.
@@ -555,13 +585,14 @@ class FastMask:
     def _resolve_color_ids(
         self,
         color_ids: npt.NDArray[np.integer] | None,
-        colors: npt.NDArray[np.uint8] | None,
+        colors: npt.NDArray[np.integer] | None,
     ) -> npt.NDArray[Any]:
         """Turn a mask request given as colors or as color IDs into a 1-D array of color IDs.
 
         Args:
           color_ids (npt.NDArray[np.integer] | None): 1-D integer color IDs, used when given.
-          colors (npt.NDArray[np.uint8] | None): uint8 colors in the image's channel layout.
+          colors (npt.NDArray[np.integer] | None): uint8 colors in the image's channel layout, or pixel
+            values of a 2-D image.
 
         Returns:
           npt.NDArray[Any]: 1-D color IDs in request order; ``unique_color_ids`` when both arguments are None.
@@ -570,9 +601,10 @@ class FastMask:
             return color_ids
         if colors is None:
             return self.unique_color_ids
-        if self.is_grayscale:
+        if self.is_single_channel:
             return colors.reshape(-1)
-        return colors_to_color_ids(colors).reshape(-1)
+        # Color images take uint8 channel values.
+        return colors_to_color_ids(cast("npt.NDArray[np.uint8]", colors)).reshape(-1)
 
     def _write_kernel_masks(self, requested: npt.NDArray[Any], masks: npt.NDArray[np.bool_]) -> bool:
         """Write masks straight from a 3-channel image with the numba kernel when ``backend`` is ``"auto"``.
@@ -631,10 +663,12 @@ class FastMask:
     def _use_label_image(self, num_requested: int) -> bool:
         """Choose whether a mask query compares against the label image or the color ID image.
 
-        Grayscale images always compare against the image itself, which is already one byte per pixel. Color images use
-        the label image when it exists, or when its dtype is narrower than the uint32 color ID image and either the run
-        table is already computed (building the label image from it costs less than one uint32 comparison) or enough
-        masks are requested to amortize the run scan. Images with more than 65536 colors have uint32 label images.
+        One-byte 2-D images always compare against the image itself. Other images use the label image once it exists,
+        and otherwise build it when its dtype is narrower than the color ID image and the query amortizes the build.
+        For color images that holds when the run table is already computed (expanding it then costs less than one
+        uint32 comparison) or enough masks are requested to pay for the run scan as well. For wider 2-D images, whose
+        own comparisons are cheaper, it takes both: a computed run table and enough masks. Images with more than 65536
+        colors have uint32 label images.
 
         Args:
           num_requested (int): Number of masks in the query.
@@ -642,18 +676,24 @@ class FastMask:
         Returns:
           bool: True to compare against ``label_image``, False to compare against ``color_id_image``.
         """
-        if self.is_grayscale:
+        if self.is_single_channel and self.image.dtype.itemsize == 1:
             return False
         # cached_property stores a computed value in the instance __dict__ under the property's name.
         if "label_image" in self.__dict__:
             return True
-        if "_runs" in self.__dict__ or num_requested >= _LABEL_PATH_MIN_MASKS:
-            num_colors = self.unique_color_ids.size
-            # The numba analysis kernel caches its label image while computing the unique colors.
-            if "label_image" in self.__dict__:
-                return True
-            return _label_dtype(num_colors).itemsize < self.color_id_image.dtype.itemsize
-        return False
+        runs_computed = "_runs" in self.__dict__
+        many_masks = num_requested >= _LABEL_PATH_MIN_MASKS
+        if self.is_single_channel:
+            build = runs_computed and many_masks
+        else:
+            build = runs_computed or many_masks
+        if not build:
+            return False
+        num_colors = self.unique_color_ids.size
+        # The numba analysis kernel caches its label image while computing the unique colors.
+        if "label_image" in self.__dict__:
+            return True
+        return _label_dtype(num_colors).itemsize < self.color_id_image.dtype.itemsize
 
     def _mask_source(self, requested: npt.NDArray[Any]) -> tuple[npt.NDArray[Any], npt.NDArray[Any], list[bool]]:
         """Return the image to compare against, the per-request comparison value, and which requests can match.
@@ -672,19 +712,13 @@ class FastMask:
         if self._use_label_image(requested.size):
             source = self.label_image
             unique_ids = self.unique_color_ids
-            ranks = np.searchsorted(unique_ids, requested)
-            present = np.zeros(requested.size, dtype=np.bool_)
-            in_bounds = ranks < unique_ids.size
-            present[in_bounds] = unique_ids[ranks[in_bounds]] == requested[in_bounds]
+            ids, present = _cast_requests(requested, unique_ids.dtype)
+            ranks = np.searchsorted(unique_ids, ids)
+            present &= ranks < unique_ids.size
+            present[present] = unique_ids[ranks[present]] == ids[present]
             values = np.where(present, ranks, 0).astype(source.dtype)
             return source, values, present.tolist()
 
         source = self.color_id_image
-        if requested.dtype == source.dtype:
-            # The copy keeps the comparison values intact when the request array shares storage with the output.
-            return source, requested.copy(), [True] * requested.size
-
-        limits = np.iinfo(source.dtype)
-        in_range = (requested >= limits.min) & (requested <= limits.max)
-        values = np.where(in_range, requested, 0).astype(source.dtype)
+        values, in_range = _cast_requests(requested, source.dtype)
         return source, values, in_range.tolist()

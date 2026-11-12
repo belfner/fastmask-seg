@@ -49,7 +49,7 @@ Once the label image is cached, masks compare against it with NumPy at about 1 m
 
 Buffers occupy storage separate from the image and from each other. Results written into a buffer are views of it and stay valid until the buffer is reused.
 
-`color_id_buffer` serves the NumPy path: `backend="numpy"`, NumPy-only installs, and images with more than 256 colors. Grayscale and 4-channel images derive their IDs from the image itself and ignore it. The numba kernels read the image directly, and a call they serve while a `color_id_buffer` is set emits a `UserWarning`. Two live `FastMask` objects sharing one `color_id_buffer` overwrite each other's IDs.
+`color_id_buffer` serves the NumPy path: `backend="numpy"`, NumPy-only installs, and images with more than 256 colors. 2-D and 4-channel images derive their IDs from the image itself and ignore it. The numba kernels read the image directly, and a call they serve while a `color_id_buffer` is set emits a `UserWarning`. Two live `FastMask` objects sharing one `color_id_buffer` overwrite each other's IDs.
 
 ```python
 ids_buf = np.empty((H, W), dtype=np.uint32)
@@ -58,6 +58,6 @@ result = fms.unique_color_masks(image, out=masks_buf, color_id_buffer=ids_buf, b
 
 ## Caching
 
-`FastMask(image)` records the image and its channel layout and computes nothing else. Each derived array is computed on first access and cached on the instance; the analysis kernel computes the unique colors, counts, and label image together. A `FastMask` borrows its image, and the color ID image of a grayscale or 4-channel image shares its storage, so keep the image unchanged while the object is in use and wrap a changed image in a new `FastMask`.
+`FastMask(image)` records the image and its channel layout and computes nothing else. Each derived array is computed on first access and cached on the instance; the analysis kernel computes the unique colors, counts, and label image together. A `FastMask` borrows its image, and the color ID image of a 2-D or 4-channel image shares its storage, so keep the image unchanged while the object is in use and wrap a changed image in a new `FastMask`.
 
 A function given an image builds a temporary `FastMask`, computes what that call needs, and discards it. Given a `FastMask`, it uses and fills that object's cache. `iter_color_masks` prepares its comparison image when called and computes each mask as the iterator reaches it.

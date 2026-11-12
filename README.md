@@ -56,7 +56,7 @@ fms.color_ids_to_colors(ids, fms.ColorFormat.COLOR)
 fms.sort_colors(colors)              # colors in color ID order
 ```
 
-- **Images** are uint8 arrays of shape `(H, W)`, `(H, W, 3)`, or `(H, W, 4)`, as `cv2.imread` or `np.asarray(PIL.Image.open(...))` give them. In a grayscale image the gray value is the color.
+- **Images** are uint8 arrays of shape `(H, W, 3)` or `(H, W, 4)`, as `cv2.imread` or `np.asarray(PIL.Image.open(...))` give them, or 2-D arrays of any integer dtype: a grayscale image, or a label image such as an instance-ID or object-index pass. In a 2-D image each pixel value is its color ID.
 - **Colors** follow the image's channel order: BGR for OpenCV, RGB for Pillow. A color ID packs a color into one uint32 with channel 0 in the lowest byte.
 - **Mask requests** take `colors=` or `color_ids=`, and with neither they cover every color in the image. A color absent from the image gives an all-False mask.
 - **Bounding boxes** have exclusive ends, so `mask[rmin:rmax, cmin:cmax]` crops a mask to its pixels. An empty mask raises `ValueError`.

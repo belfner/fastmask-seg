@@ -45,7 +45,8 @@ class UniqueColorMasks(NamedTuple):
     """Every unique color of an image together with its mask.
 
     Attributes:
-      colors (npt.NDArray[np.uint8]): Unique colors in the image's channel layout, ordered by color ID.
+      colors (npt.NDArray[np.integer]): Unique colors in the image's channel layout, ordered by color ID; pixel
+        values for 2-D images.
       color_ids (npt.NDArray[Any]): Sorted unique color IDs.
       color_counts (npt.NDArray[np.int64]): Pixel count of each color.
       masks (npt.NDArray[np.bool_]): Masks of shape ``(num_masks, H, W)``, one per color in the same order. When the
@@ -53,7 +54,7 @@ class UniqueColorMasks(NamedTuple):
       num_masks (int): Number of masks written, equal to the number of unique colors.
     """
 
-    colors: npt.NDArray[np.uint8]
+    colors: npt.NDArray[np.integer]
     color_ids: npt.NDArray[Any]
     color_counts: npt.NDArray[np.int64]
     masks: npt.NDArray[np.bool_]
@@ -61,14 +62,14 @@ class UniqueColorMasks(NamedTuple):
 
 
 def _as_fast_mask(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     color_id_buffer: npt.NDArray[np.uint32] | None,
     backend: Backend = "auto",
 ) -> FastMask:
     """Return ``source`` when it is a FastMask, or wrap the image in a new one.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask. A FastMask keeps its own
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask. A FastMask keeps its own
         ``color_id_buffer`` and ``backend``.
       color_id_buffer (npt.NDArray[np.uint32] | None): Color ID storage for a new FastMask.
       backend (Backend = "auto"): Mask backend for a new FastMask.
@@ -82,7 +83,7 @@ def _as_fast_mask(
 
 
 def color_id_image(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -90,18 +91,18 @@ def color_id_image(
     """Return the image with every pixel replaced by its color ID.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
         3-channel image source, see ``FastMask``.
 
     Returns:
-      npt.NDArray[Any]: ``(H, W)`` color IDs, uint8 for grayscale and uint32 for color images.
+      npt.NDArray[Any]: ``(H, W)`` color IDs, in the image's dtype for 2-D images and uint32 for color images.
     """
     return _as_fast_mask(source, color_id_buffer).color_id_image
 
 
 def unique_color_ids(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -109,7 +110,7 @@ def unique_color_ids(
     """Return the sorted unique color IDs present in an image.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
         3-channel image source, see ``FastMask``.
 
@@ -120,26 +121,27 @@ def unique_color_ids(
 
 
 def unique_colors(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
-) -> npt.NDArray[np.uint8]:
+) -> npt.NDArray[np.integer]:
     """Return the unique colors present in an image, ordered by color ID.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
         3-channel image source, see ``FastMask``.
 
     Returns:
-      npt.NDArray[np.uint8]: Unique colors in the image's channel layout; a 1-D array of gray values for grayscale.
+      npt.NDArray[np.integer]: Unique colors in the image's channel layout; a 1-D array of pixel values for 2-D
+        images.
     """
     return _as_fast_mask(source, color_id_buffer).unique_colors
 
 
 def unique_color_counts(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -147,7 +149,7 @@ def unique_color_counts(
     """Return the pixel count of each unique color, ordered by color ID.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
         3-channel image source, see ``FastMask``.
 
@@ -158,7 +160,7 @@ def unique_color_counts(
 
 
 def label_image(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -166,7 +168,7 @@ def label_image(
     """Return the image with every pixel replaced by its index into the sorted unique color IDs.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
         3-channel image source, see ``FastMask``.
 
@@ -177,10 +179,10 @@ def label_image(
 
 
 def get_color_masks(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
-    colors: npt.NDArray[np.uint8] | None = None,
+    colors: npt.NDArray[np.integer] | None = None,
     color_ids: npt.NDArray[np.integer] | None = None,
     out: npt.NDArray[np.bool_] | None = None,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -189,9 +191,9 @@ def get_color_masks(
     """Generate a boolean mask for each requested color or color ID.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
-      colors (npt.NDArray[np.uint8] | None = None): uint8 colors in the image's channel layout. When both ``colors`` and
-        ``color_ids`` are None, masks are generated for every unique color.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
+      colors (npt.NDArray[np.integer] | None = None): uint8 colors in the image's channel layout, or pixel values of a
+        2-D image. When both ``colors`` and ``color_ids`` are None, masks are generated for every unique color.
       color_ids (npt.NDArray[np.integer] | None = None): 1-D integer color IDs.
       out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(N, H, W)`` with ``N`` at least the number of
         requested masks; masks are written to its first entries. None allocates a new array.
@@ -207,10 +209,10 @@ def get_color_masks(
 
 
 def get_color_mask(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
-    color: npt.NDArray[np.uint8] | None = None,
+    color: npt.NDArray[np.integer] | np.integer | None = None,
     color_id: int | None = None,
     out: npt.NDArray[np.bool_] | None = None,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -219,8 +221,9 @@ def get_color_mask(
     """Generate the boolean mask of one color or color ID.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
-      color (npt.NDArray[np.uint8] | None = None): One uint8 color in the image's channel layout.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
+      color (npt.NDArray[np.integer] | np.integer | None = None): One uint8 color in the image's channel layout, or
+        one pixel value of a 2-D image.
       color_id (int | None = None): One color ID.
       out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(H, W)`` that receives the mask and is
         returned. None allocates a new array.
@@ -236,10 +239,10 @@ def get_color_mask(
 
 
 def iter_color_masks(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
-    colors: npt.NDArray[np.uint8] | None = None,
+    colors: npt.NDArray[np.integer] | None = None,
     color_ids: npt.NDArray[np.integer] | None = None,
     out: npt.NDArray[np.bool_] | None = None,
     color_id_buffer: npt.NDArray[np.uint32] | None = None,
@@ -248,9 +251,9 @@ def iter_color_masks(
     """Return an iterator over the mask of each requested color, one at a time.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
-      colors (npt.NDArray[np.uint8] | None = None): uint8 colors in the image's channel layout. When both ``colors`` and
-        ``color_ids`` are None, masks are generated for every unique color.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
+      colors (npt.NDArray[np.integer] | None = None): uint8 colors in the image's channel layout, or pixel values of a
+        2-D image. When both ``colors`` and ``color_ids`` are None, masks are generated for every unique color.
       color_ids (npt.NDArray[np.integer] | None = None): 1-D integer color IDs.
       out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(H, W)`` yielded for every mask, overwritten
         in place. None allocates each mask.
@@ -266,7 +269,7 @@ def iter_color_masks(
 
 
 def unique_color_masks(
-    source: npt.NDArray[np.uint8] | FastMask,
+    source: npt.NDArray[np.integer] | FastMask,
     /,
     *,
     out: npt.NDArray[np.bool_] | None = None,
@@ -276,7 +279,7 @@ def unique_color_masks(
     """Return every unique color of an image with its pixel count and mask, from one analysis.
 
     Args:
-      source (npt.NDArray[np.uint8] | FastMask): Image or existing FastMask.
+      source (npt.NDArray[np.integer] | FastMask): Image or existing FastMask.
       out (npt.NDArray[np.bool_] | None = None): Bool buffer of shape ``(N, H, W)`` with ``N`` at least the number of
         unique colors; masks are written to its first entries. None allocates a new array.
       color_id_buffer (npt.NDArray[np.uint32] | None = None): ``(H, W)`` uint32 storage for the color IDs of a
